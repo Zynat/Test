@@ -1,53 +1,135 @@
-﻿#region
-
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
 using LeagueSharp;
 using LeagueSharp.Common;
-
-#endregion
-
-namespace TestAs
+using SharpDX;
+using Color = System.Drawing.Color;
+namespace ZyTrynd
 {
-    internal class Program
+    class Program
     {
-        public const string TestAs = "TestAs";
-        //Menu
-        public static Menu Config;
-        private static void Main(string[] args)
+        public static string ChampName = "Tryndamere";
+        public static Orbwalking.Orbwalker Orbwalker;
+        public static Obj_AI_Base Player = ObjectManager.Player; // Instead of typing ObjectManager.Player you can just type Player
+        public static Spell Q, W, E, R;
+
+        public static Menu Zy;
+        static void Main(string[] args)
         {
             CustomEvents.Game.OnGameLoad += Game_OnGameLoad;
         }
 
-        private static void Game_OnGameLoad(EventArgs args)
+        static void Game_OnGameLoad(EventArgs args)
         {
 
-            //Create the menu
-            Config = new Menu("TestMenu", "TestMenu", true);
+            Q = new Spell(SpellSlot.Q, 0);
+            W = new Spell(SpellSlot.W, 400);
+            E = new Spell(SpellSlot.E, 660);
+            R = new Spell(SpellSlot.R, 0);
+            //Base menu
+            Zy = new Menu("ZyTrynd", "Zy", true);
+            //Orbwalker and menu
+            Zy.AddSubMenu(new Menu("Orbwalker", "Orbwalker"));
+            Orbwalker = new Orbwalking.Orbwalker(Zy.SubMenu("Orbwalker"));
+            //Target selector and menu
+            var ts = new Menu("Target Selector", "Target Selector");
+            SimpleTs.AddToMenu(ts);
+            Zy.AddSubMenu(ts);
+            //Combo menu
+            Zy.AddSubMenu(new Menu("Combo", "Combo"));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("useQ", "Use Q?").SetValue(true));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("useW", "Use W?").SetValue(true));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("useE", "Use E?").SetValue(true));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("useR", "Use R?").SetValue(true));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("ComboActive", "Combo").SetValue(new KeyBind(32, KeyBindType.Press)));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("QonHp", "Q on % hp")).SetValue(new Slider(25, 100, 0));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("RonHp", "R on % hp")).SetValue(new Slider(10, 100, 0));
+            Zy.AddToMainMenu();
 
-            Config.AddSubMenu(new Menu("Spam", "Spam"));
-            Config.SubMenu("Spam")
-                .AddItem(new MenuItem("SpamAll", "Spam All").SetValue(new KeyBind(32, KeyBindType.Press)));
-            Config.AddToMainMenu();
-            //Events
-            Game.OnGameUpdate += Game_OnGameUpdate;
+            Drawing.OnDraw += Drawing_OnDraw; // Add onDraw
+            Game.OnGameUpdate += Game_OnGameUpdate; // adds OnGameUpdate (Same as onTick in bol)
 
         }
 
-        private static void Game_OnGameUpdate(EventArgs args)
+        static void Game_OnGameUpdate(EventArgs args)
         {
-            if (Config.Item("SpamAll").GetValue<KeyBind>().Active)
+            if (Zy.Item("ComboActive").GetValue<KeyBind>().Active)
             {
-                SpamAlllol();
+                Combo();
             }
         }
 
-        private static void SpamAlllol()
+        static void Drawing_OnDraw(EventArgs args)
         {
-            Game.Say("/all Fuck you.");
         }
 
+        public static void Combo()
+        {
+            var target = SimpleTs.GetTarget(W.Range, SimpleTs.DamageType.Physical);
+            useRSmart();
+            useQSmart();
+            //UseE();
+            useWSmart(target);
+        }
+
+        public static void useQSmart()
+        {
+            if (!Q.IsReady())
+                return;
+            if (CurrHP() <= Zy.Item("QonHp").GetValue<Slider>().Value)
+                Q.Cast();
+        }
+
+        public static void useWSmart(Obj_AI_Hero target)
+        {
+            if (!W.IsReady())
+                return;
+
+            float trueAARange = Player.AttackRange + target.BoundingRadius;
+            float trueERange = target.BoundingRadius + W.Range;
+
+            float dist = Player.Distance(target);
+            Vector2 dashPos = new Vector2();
+            if (target.IsMoving)
+            {
+                Vector2 tpos = target.Position.To2D();
+                Vector2 path = target.Path[0].To2D() - tpos;
+                path.Normalize();
+                dashPos = tpos + (path * 100);
+            }
+            float targ_ms = (target.IsMoving && Player.Distance(dashPos) > dist) ? target.MoveSpeed : 0;
+            float msDif = (Player.MoveSpeed - targ_ms) == 0 ? 0.0001f : (Player.MoveSpeed - targ_ms);
+            float timeToReach = (dist - trueAARange) / msDif;
+            if (dist > trueAARange && dist < trueERange)
+            {
+                if (timeToReach > 1.7f || timeToReach < 0.0f)
+                {
+                    W.Cast();
+                }
+            }
+        }
+
+        public static void UseE()
+        {
+            return;
+        }
+
+        public static void useRSmart()
+        {
+            if (!R.IsReady())
+                return;
+            if (CurrHP() <= Zy.Item("RonHp").GetValue<Slider>().Value)
+                R.Cast();
+        }
+
+
+        public static int CurrHP()
+        {
+            return (int)((Player.Health / Player.MaxHealth) * 100);
+        }
     }
 }
