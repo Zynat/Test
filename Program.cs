@@ -30,6 +30,8 @@ namespace ZyTrynd
             W = new Spell(SpellSlot.W, 400);
             E = new Spell(SpellSlot.E, 660);
             R = new Spell(SpellSlot.R, 0);
+
+            E.SetSkillshot(0f, 160f, 700f, false, SkillshotType.SkillshotLine);
             //Base menu
             Zy = new Menu("ZyTrynd", "Zy", true);
             //Orbwalker and menu
@@ -41,13 +43,10 @@ namespace ZyTrynd
             Zy.AddSubMenu(ts);
             //Combo menu
             Zy.AddSubMenu(new Menu("Combo", "Combo"));
-            Zy.SubMenu("Combo").AddItem(new MenuItem("useQ", "Use Q?").SetValue(true));
-            Zy.SubMenu("Combo").AddItem(new MenuItem("useW", "Use W?").SetValue(true));
-            Zy.SubMenu("Combo").AddItem(new MenuItem("useE", "Use E?").SetValue(true));
-            Zy.SubMenu("Combo").AddItem(new MenuItem("useR", "Use R?").SetValue(true));
-            Zy.SubMenu("Combo").AddItem(new MenuItem("ComboActive", "Combo").SetValue(new KeyBind(32, KeyBindType.Press)));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("HitChance", "E Hitchance").SetValue(new StringList(new[] { "Low", "Medium", "High" })));
             Zy.SubMenu("Combo").AddItem(new MenuItem("QonHp", "Q on % hp")).SetValue(new Slider(25, 100, 0));
             Zy.SubMenu("Combo").AddItem(new MenuItem("RonHp", "R on % hp")).SetValue(new Slider(10, 100, 0));
+            Zy.SubMenu("Combo").AddItem(new MenuItem("ComboActive", "Combo").SetValue(new KeyBind(32, KeyBindType.Press)));
             Zy.AddToMainMenu();
 
             Drawing.OnDraw += Drawing_OnDraw; // Add onDraw
@@ -57,6 +56,7 @@ namespace ZyTrynd
 
         static void Game_OnGameUpdate(EventArgs args)
         {
+
             if (Zy.Item("ComboActive").GetValue<KeyBind>().Active)
             {
                 Combo();
@@ -69,10 +69,10 @@ namespace ZyTrynd
 
         public static void Combo()
         {
-            var target = SimpleTs.GetTarget(W.Range, SimpleTs.DamageType.Physical);
+            var target = SimpleTs.GetTarget(E.Range, SimpleTs.DamageType.Physical);
             useRSmart();
             useQSmart();
-            //UseE();
+            useESmart(target);
             useWSmart(target);
         }
 
@@ -113,9 +113,29 @@ namespace ZyTrynd
             }
         }
 
-        public static void UseE()
+        public static void useESmart(Obj_AI_Hero t)
         {
-            return;
+            if (!E.IsReady())
+                return;
+
+            Obj_AI_Hero target = SimpleTs.GetTarget(E.Range, SimpleTs.DamageType.Magical);
+            if (target == null) return;
+            var rMode = Zy.Item("HitChance").GetValue<StringList>().SelectedIndex;
+            if (E.IsReady() && ObjectManager.Player.Distance(target) <= E.Range)
+            {
+                switch (rMode)
+                {
+                    case 1://Low
+                        E.Cast(target);
+                        break;
+                    case 2://Medium
+                        E.CastIfHitchanceEquals(target, HitChance.Medium);
+                        break;
+                    case 3://High
+                        E.CastIfHitchanceEquals(target, HitChance.High);
+                        break;
+                }
+            }
         }
 
         public static void useRSmart()
